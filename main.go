@@ -10,6 +10,7 @@ import (
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
+	otlog "github.com/opentracing/opentracing-go/log"
 	jaeger "github.com/uber/jaeger-client-go"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
 	jaegerlog "github.com/uber/jaeger-client-go/log"
@@ -55,28 +56,83 @@ func handler(res http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if err != nil {
 			ext.Error.Set(span, true)
+			span.LogFields(otlog.Error(err))
 		}
 		span.Finish()
 	}()
 
-	err = step01(ctx)
+	err = auth(ctx)
+	if err != nil {
+		return
+	}
+	err = query(ctx)
 
-	fmt.Fprintf(res, "hello\n")
+	fmt.Fprintf(res, "hello %d\n", time.Now().Unix())
 }
 
-func step01(ctx context.Context) error {
+func authInner(ctx context.Context) error {
 	var err error
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "inner")
+	span, ctx := opentracing.StartSpanFromContext(ctx, "auth_inner")
 	defer func() {
 		if err != nil {
 			ext.Error.Set(span, true)
+			span.LogFields(otlog.Error(err))
 		}
 		span.Finish()
 	}()
 
 	select {
-	case <-time.After(time.Duration(rand.Int63n(1250)) * time.Millisecond):
+	case <-time.After(time.Duration(rand.Int63n(1100)) * time.Millisecond):
+		return nil
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+
+	return err
+}
+
+func auth(ctx context.Context) error {
+	var err error
+
+	span, ctx := opentracing.StartSpanFromContext(ctx, "auth")
+	defer func() {
+		if err != nil {
+			ext.Error.Set(span, true)
+			span.LogFields(otlog.Error(err))
+		}
+		span.Finish()
+	}()
+
+	err = authInner(ctx)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-time.After(time.Duration(rand.Int63n(1100)) * time.Millisecond):
+		return nil
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+
+	return err
+}
+
+func query(ctx context.Context) error {
+	var err error
+
+	span, ctx := opentracing.StartSpanFromContext(ctx, "query_db")
+	defer func() {
+		if err != nil {
+			ext.Error.Set(span, true)
+			span.LogFields(otlog.Error(err))
+		}
+		span.Finish()
+	}()
+
+	select {
+	case <-time.After(time.Duration(rand.Int63n(1100)) * time.Millisecond):
 		return nil
 	case <-ctx.Done():
 		err = ctx.Err()
